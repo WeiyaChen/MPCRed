@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// 类中包含当player触墙时触发reset时调用的方法
 public class WallReset : MonoBehaviour {
     public GameObject realRoom;
     private Transform player;

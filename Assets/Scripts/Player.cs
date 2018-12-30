@@ -22,6 +22,7 @@ public class Player : MonoBehaviour {
         //Debug.Log(gameObject.GetComponent<Transform>().rotation.eulerAngles.y);
 	}
 
+    // 简单模拟速度的变化，每帧调用
     private void VelocityChange()
     {
         Random.InitState(Random.Range(0, 100));

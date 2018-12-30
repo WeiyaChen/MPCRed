@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// 主类：周期性地记录位置，速度等数据并调用重定向算法
 public class DataRecord : MonoBehaviour {
 
     //exponentially smoothed orientation
@@ -18,10 +19,11 @@ public class DataRecord : MonoBehaviour {
     private float finalOrientation;
     private int carryBit;
 
-   //velocity data record
-    private int timerVelocity;
+    //velocity data record
+    //记录前后两帧之间的位移及角度差所采用的属性值
+    private int timerVelocity; //记录速度的定时次数
     [SerializeField]
-    private float velocityInterval;
+    private float velocityInterval; //采集速度的时间间隔
     private Vector3 presentPosition;
     private Vector3 lastPosition;
     private float presentDirection;
@@ -31,28 +33,33 @@ public class DataRecord : MonoBehaviour {
     private float distance;
     private float velocity;
 
-    public struct Data
+    // 为了保证方法调用的先后顺序，程序共用一个定时器timer定时器，所以分别有次数和时间间隔，使用的方法为
+    // if（timer-间隔* 次数）>=间隔{次数+1，并执行相关的定时操作}
+
+
+public struct Data
     {
         public float virtualOrientation;
         public float velocity;
         public Vector3 virtualPosition;
         public float realOrientation;
         public Vector3 realPosition;
-    };
+    }; // 重定向算法的参数结构
 
     public struct WayPointsReal
     {
         public Vector3 realPosition;
         public WayPoint.turnType turnType;
-    };
+    }; //路标的参数结构
 
-    public float timeHorizon; //timaeHorizon应该为velocityInterval与orientation的公倍数
+    public float timeHorizon; //timaeHorizon应该为velocityInterval与orientation的公倍数,调用重定向方法的时间间隔
     public Transform playerTransform;
-    public Data data;
+    public Data data; //本轮重定向算法的参数
     [HideInInspector]
     public float timer;
-    private int timerDataRecord;
+    private int timerDataRecord; //调用重定向方法的次数
 
+    //模拟真实房间的四个角及真实房间的中心的Transform组件
     public Transform Corner1;
     public Transform Corner2;
     public Transform Corner3;
@@ -64,7 +71,7 @@ public class DataRecord : MonoBehaviour {
     [SerializeField]
     private Player player;
 
-    private Redirector.ActionTaken action;
+    private Redirector.Action action;
 
     private void Awake()
     {
@@ -84,7 +91,7 @@ public class DataRecord : MonoBehaviour {
         Corner4 = GameObject.Find("Corner4").GetComponent<Transform>();
         Center= GameObject.Find("Center").GetComponent<Transform>();
         wayPoint = gameObject.GetComponent<WayPoint>();
-        action = Redirector.ActionTaken.Zero;
+        action = Redirector.Action.Zero;
     }
 	
 	// Update is called once per frame
@@ -95,17 +102,17 @@ public class DataRecord : MonoBehaviour {
         //Apply Redirection
         switch(action)
         {
-            case Redirector.ActionTaken.Zero:break;
-            case Redirector.ActionTaken.PositiveRotation:
+            case Redirector.Action.Zero:break;
+            case Redirector.Action.PositiveRotation:
                 redirector.ApplyRedirection(Redirector.RedirectorType.Rotation,player.transform,deltaDistance, deltaDiv,gain:redirector.rotateGainEnlarge);
                 break;
-            case Redirector.ActionTaken.NegativeRotation:
+            case Redirector.Action.NegativeRotation:
                 redirector.ApplyRedirection(Redirector.RedirectorType.Rotation, player.transform, deltaDistance, deltaDiv, gain: redirector.rotateGainDecrease);
                 break;
-            case Redirector.ActionTaken.ClockwiseCurvature:
+            case Redirector.Action.ClockwiseCurvature:
                 redirector.ApplyRedirection(Redirector.RedirectorType.Curvature, player.transform, deltaDistance, deltaDiv, clockwise: true, radius: redirector.curvatureRadius);
                 break;
-            case Redirector.ActionTaken.CounterClockwiseCurvature:
+            case Redirector.Action.CounterClockwiseCurvature:
                 redirector.ApplyRedirection(Redirector.RedirectorType.Curvature, player.transform, deltaDistance, deltaDiv, clockwise: false, radius: redirector.curvatureRadius);
                 break;
             default:break;
@@ -142,15 +149,16 @@ public class DataRecord : MonoBehaviour {
             data.realPosition = GeneralVector3.GetRealPoint(originPoint, xAxis, zAxis, data.virtualPosition);
             data.realOrientation = player.transform.eulerAngles.y - Center.rotation.eulerAngles.y;
             timerDataRecord++;
-            WayPointsReal[] wayPointsReals = CalWayPoint2DCoor(wayPoint.wayPoints, playerTransform, wayPoint.wayPoints.Length, data.realOrientation, data.velocity * redirector.timeDepth * timeHorizon*2, originPoint, xAxis, zAxis);
+            WayPointsReal[] wayPointsReals = CalWayPoint2DCoor(wayPoint.wayPoints, playerTransform, wayPoint.wayPoints.Length, data.realOrientation, data.velocity * redirector.planningDepth * timeHorizon*2, originPoint, xAxis, zAxis);
             Debug.Log(data.realPosition);
             Debug.Log(wayPointsReals[0].realPosition);
-            action = redirector.MPCRedirect(data, wayPointsReals, redirector.timeDepth).action;
+            action = redirector.Plan(data, wayPointsReals, redirector.planningDepth).action;
             Debug.Log(action);
         }
 
 	}
 
+    //重置重定向参数的值
     private void ResetData()
     {
         data.virtualOrientation =0;
@@ -160,6 +168,7 @@ public class DataRecord : MonoBehaviour {
         data.realPosition = new Vector3(0, 0, 0);
     }
 
+    //计算两帧之间的位移及方向变化
     private void CalculateDeltaPar()//Calculate deltaDiv and deltaPos
     {
         //distance
@@ -251,7 +260,8 @@ public class DataRecord : MonoBehaviour {
         //Debug.Log(direction);
         player.transform.position = direction.GetPoint(player.velocity * Time.deltaTime)+new Vector3(0,0.5f,0);
     }
-    
+
+    //计算与player最近的路标点，即确定player的行走方向，返回其在数组中的序号
     private int NearestMoveableWayPoint()
     {
         float minDistance = 50000;
@@ -271,6 +281,7 @@ public class DataRecord : MonoBehaviour {
         return num + 1;
     }
 
+    //将所有路标点的位置投射到一个二维坐标系中。并返回他们在二维坐标系中的坐标
     private WayPointsReal[] CalWayPoint2DCoor(WayPoint.WayPointSequence[] wayPoints,Transform playerPos,int length, float orientation, float routineDistance, Vector3 origin, Vector3 xAxis, Vector3 zAxis)
     {
         int nearestnum = NearestMoveableWayPoint();

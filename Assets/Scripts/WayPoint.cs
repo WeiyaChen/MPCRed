@@ -56,8 +56,10 @@ public class WayPoint : MonoBehaviour {
             }
             else
             {
-                if (result[2] == "+90") wayPoints[wayPointNumber - 1].turnType = turnType.ninetyRight;
-                else if (result[2] == "-90") wayPoints[wayPointNumber - 1].turnType = turnType.ninetyLeft;
+                if (result[2] == "+90")
+                    wayPoints[wayPointNumber - 1].turnType = turnType.ninetyRight;
+                else if (result[2] == "-90")
+                    wayPoints[wayPointNumber - 1].turnType = turnType.ninetyLeft;
                 //TODO:正负180
             }
             //for (int j = 0; j < result.Length; j++)

@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class Redirector : MonoBehaviour {
-    
+
+    // 算法中用到的包含cost及采取action的中间结构
     public struct MPCResult
     {
         public float cost;
-        public ActionTaken action;
+        public Action action;
     };
 
+    // 重定向类型，无，旋转，曲率
     public enum RedirectorType
     {
         Absent,
@@ -17,7 +19,7 @@ public class Redirector : MonoBehaviour {
         Curvature
     };
 
-    public enum ActionTaken
+    public enum Action
     {
         Zero=0,
         PositiveRotation=1,
@@ -27,8 +29,11 @@ public class Redirector : MonoBehaviour {
         ClockwiseCurvature=5,
         CounterClockwiseCurvature=6
     };
+
+    
     private int MPCResultNum=7;
 
+    // 在重定向算法中采取曲率增益时计算的次数
     private int curvatureCalFrequence=25;
 
     [SerializeField]
@@ -37,11 +42,14 @@ public class Redirector : MonoBehaviour {
     [SerializeField]
     private GameObject sceneObject;
     [SerializeField]
+    // 迭代过程中action cost的耗损系数，时间域越远的结果，耗损得越大，假设在第一个时间域cost为5，
+    // 第二个时间域cost为10，第三个时间域cost为8，耗损系数为0.8，最终总的cost=5+10*0.8+8*0.8^2=18.12
     private float declineFactor;
     [SerializeField]
     private GameObject realRoom;
     private Transform realRoomTransform;
 
+    // 在重定向算法中采取曲率增益时的半径
     public float curvatureRadius;
 
     [SerializeField]
@@ -50,6 +58,8 @@ public class Redirector : MonoBehaviour {
     private float resetCost;
     [SerializeField]
     private float curvatureCost;
+
+    // 用于判断player是否应该朝下一个路标前进，当player离最近的路标之间的距离小于该值时，player应该朝下一个路标前进
     private float distanceThreshlod;
 
     [SerializeField]
@@ -61,7 +71,7 @@ public class Redirector : MonoBehaviour {
     [SerializeField]
     private float actionFactor;
 
-    //tracked space scale
+    // size of the physical workspace
     [SerializeField]
     private float width;
     [SerializeField]
@@ -74,8 +84,8 @@ public class Redirector : MonoBehaviour {
     private Vector3 lastPos;
     private float lastDiv;
 
-    public int timeDepth;
-    private float timeHorizon;
+    public int planningDepth;
+    private float stageDuration;
 
     private void Awake()
     {
@@ -83,7 +93,7 @@ public class Redirector : MonoBehaviour {
         if (playerTransform == null) DebugNull("playerTransform/Redirector");
         realRoomTransform = realRoom.GetComponent<Transform>();
         if (realRoomTransform == null) DebugNull("realRoomTransform/Redirector");
-        timeHorizon = gameObject.GetComponent<DataRecord>().timeHorizon;
+        stageDuration = gameObject.GetComponent<DataRecord>().timeHorizon;
     }
 
     private void Start()
@@ -131,9 +141,9 @@ public class Redirector : MonoBehaviour {
         lastDiv = playerTransform.rotation.eulerAngles.y;
     }
 
-    public MPCResult MPCRedirect(DataRecord.Data data, DataRecord.WayPointsReal[] wayPoints, int depth)
+    public MPCResult Plan(DataRecord.Data data, DataRecord.WayPointsReal[] wayPoints, int depth)
     {
-        MPCResult result =new MPCResult{ cost = 0, action = ActionTaken.Zero };
+        MPCResult result =new MPCResult{ cost = 0, action = Action.Zero };
 
         if (depth == 0) return result;
         else
@@ -158,9 +168,9 @@ public class Redirector : MonoBehaviour {
                 Vector3 endDir;
                 DataRecord.WayPointsReal[] tempWayPoints;
                 DataRecord.Data tempPlayerData= new DataRecord.Data();
-                switch ((ActionTaken)i)
+                switch ((Action)i)
                 {
-                    case ActionTaken.Zero:
+                    case Action.Zero:
                         //foreach(var wayPoint in wayPoints)
                         //{
                         //    Debug.Log(wayPoint.realPosition);
@@ -174,11 +184,11 @@ public class Redirector : MonoBehaviour {
                         tempPlayerData.realPosition = endPosition;
                         tempPlayerData.velocity = data.velocity;
 
-                        tempResult.action = ActionTaken.Zero;
-                        tempResult.cost = distanceCost + parallelCost + MPCRedirect(tempPlayerData, wayPoints, depth - 1).cost;
+                        tempResult.action = Action.Zero;
+                        tempResult.cost = distanceCost + parallelCost + Plan(tempPlayerData, wayPoints, depth - 1).cost;
                         break;
 
-                    case ActionTaken.PositiveRotation:
+                    case Action.PositiveRotation:
                         if (rotationCost > loopBestResult.cost) break;
                         else if (wayPoints[matchNum].turnType != WayPoint.turnType.ninetyLeft&& wayPoints[matchNum].turnType != WayPoint.turnType.ninetyRight) break;
                         else
@@ -196,8 +206,8 @@ public class Redirector : MonoBehaviour {
                                 tempPlayerData.realPosition = endPosition;
                                 tempPlayerData.velocity = data.velocity;
 
-                                tempResult.action = ActionTaken.PositiveRotation;
-                                tempResult.cost = distanceCost + parallelCost +rotationCost+ MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost;
+                                tempResult.action = Action.PositiveRotation;
+                                tempResult.cost = distanceCost + parallelCost +rotationCost+ Plan(tempPlayerData, tempWayPoints, depth - 1).cost;
                             }
                             else if(wayPoints[matchNum].turnType==WayPoint.turnType.ninetyLeft)
                             {
@@ -212,12 +222,12 @@ public class Redirector : MonoBehaviour {
                                 tempPlayerData.realPosition = endPosition;
                                 tempPlayerData.velocity = data.velocity;
 
-                                tempResult.action = ActionTaken.PositiveRotation;
-                                tempResult.cost = rotationCost+distanceCost + parallelCost+rotationCost + MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost;
+                                tempResult.action = Action.PositiveRotation;
+                                tempResult.cost = rotationCost+distanceCost + parallelCost+rotationCost + Plan(tempPlayerData, tempWayPoints, depth - 1).cost;
                             }
                         }
                         break;
-                    case ActionTaken.NegativeRotation:
+                    case Action.NegativeRotation:
                         if (rotationCost > loopBestResult.cost) break;
                         else if (wayPoints[matchNum].turnType != WayPoint.turnType.ninetyLeft && wayPoints[matchNum].turnType != WayPoint.turnType.ninetyRight) break;
                         else
@@ -237,8 +247,8 @@ public class Redirector : MonoBehaviour {
                                 tempPlayerData.realPosition = endPosition;
                                 tempPlayerData.velocity = data.velocity;
 
-                                tempResult.action = ActionTaken.NegativeRotation;
-                                tempResult.cost = rotationCost+distanceCost + parallelCost + MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost;
+                                tempResult.action = Action.NegativeRotation;
+                                tempResult.cost = rotationCost+distanceCost + parallelCost + Plan(tempPlayerData, tempWayPoints, depth - 1).cost;
                             }
                             else if (wayPoints[matchNum].turnType == WayPoint.turnType.ninetyLeft)
                             {
@@ -253,12 +263,12 @@ public class Redirector : MonoBehaviour {
                                 tempPlayerData.realPosition = endPosition;
                                 tempPlayerData.velocity = data.velocity;
 
-                                tempResult.action = ActionTaken.NegativeRotation;
-                                tempResult.cost = rotationCost + distanceCost + parallelCost + MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost;
+                                tempResult.action = Action.NegativeRotation;
+                                tempResult.cost = rotationCost + distanceCost + parallelCost + Plan(tempPlayerData, tempWayPoints, depth - 1).cost;
                             }
                         }
                         break;
-                    case ActionTaken.PositiveReset:
+                    case Action.PositiveReset:
                         if (resetCost > loopBestResult.cost) break;
                         else
                         {
@@ -272,15 +282,15 @@ public class Redirector : MonoBehaviour {
                             tempPlayerData.realPosition = endPosition;
                             tempPlayerData.velocity = data.velocity;
 
-                            tempResult.action = ActionTaken.PositiveReset;
-                            tempResult.cost = distanceCost + parallelCost + MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost+resetCost;
+                            tempResult.action = Action.PositiveReset;
+                            tempResult.cost = distanceCost + parallelCost + Plan(tempPlayerData, tempWayPoints, depth - 1).cost+resetCost;
                             break;
 
                         }
-                    //case ActionTaken.NegativeReset:
+                    //case Action.NegativeReset:
                     //    if (resetCost > loopBestResult.cost) break;
                     //    else break;
-                    case ActionTaken.ClockwiseCurvature:
+                    case Action.ClockwiseCurvature:
                         Debug.Log("Here"+ loopBestResult.cost);
                         if (curvatureCost > loopBestResult.cost) break;
                         else
@@ -289,7 +299,7 @@ public class Redirector : MonoBehaviour {
                             endPosition = tempWayPoints[matchNum].realPosition;
                             int tempMatchNum = matchNum;
                             nearestNumTemp = matchNum;
-                            float deltaPos = data.velocity * timeHorizon / curvatureCalFrequence;
+                            float deltaPos = data.velocity * stageDuration / curvatureCalFrequence;
                             float deltaAngle = 360 - (deltaPos * 360 / (2 * Mathf.PI * curvatureRadius));
                             for (int j=0;j<curvatureCalFrequence;j++)
                             {
@@ -310,11 +320,11 @@ public class Redirector : MonoBehaviour {
                             tempPlayerData.realPosition = endPosition;
                             tempPlayerData.velocity = data.velocity;
 
-                            tempResult.action = ActionTaken.ClockwiseCurvature;
-                            tempResult.cost = distanceCost + parallelCost + MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost + curvatureCost;
+                            tempResult.action = Action.ClockwiseCurvature;
+                            tempResult.cost = distanceCost + parallelCost + Plan(tempPlayerData, tempWayPoints, depth - 1).cost + curvatureCost;
                             break;
                         }
-                    case ActionTaken.CounterClockwiseCurvature:
+                    case Action.CounterClockwiseCurvature:
                         if (curvatureCost > loopBestResult.cost) break;
                         else
                         {
@@ -322,7 +332,7 @@ public class Redirector : MonoBehaviour {
                             endPosition = tempWayPoints[matchNum].realPosition;
                             int tempMatchNum = matchNum;
                             nearestNumTemp = matchNum;
-                            float deltaPos = data.velocity * timeHorizon / curvatureCalFrequence;
+                            float deltaPos = data.velocity * stageDuration / curvatureCalFrequence;
                             float deltaAngle = deltaPos * 360 / (2 * Mathf.PI * curvatureRadius);
                             for (int j = 0; j < curvatureCalFrequence; j++)
                             {
@@ -341,8 +351,8 @@ public class Redirector : MonoBehaviour {
                             tempPlayerData.realPosition = endPosition;
                             tempPlayerData.velocity = data.velocity;
 
-                            tempResult.action = ActionTaken.CounterClockwiseCurvature;
-                            tempResult.cost = distanceCost + parallelCost + MPCRedirect(tempPlayerData, tempWayPoints, depth - 1).cost + curvatureCost;
+                            tempResult.action = Action.CounterClockwiseCurvature;
+                            tempResult.cost = distanceCost + parallelCost + Plan(tempPlayerData, tempWayPoints, depth - 1).cost + curvatureCost;
                             break;
                         }
                     default:break;
@@ -353,7 +363,7 @@ public class Redirector : MonoBehaviour {
             result = loopBestResult;
 
             //multply declinefactor
-            if(depth!=timeDepth)
+            if(depth!=planningDepth)
             {
                 result.cost *= declineFactor;
             }
@@ -416,7 +426,7 @@ public class Redirector : MonoBehaviour {
     //ZeroAction
     private Vector3 ZeroAcition(DataRecord.WayPointsReal playerPos, DataRecord.WayPointsReal wayPoint,float velocity=0)
     {
-        Vector3 endPosition= GeneralVector3.LineDistance(playerPos.realPosition, wayPoint.realPosition, velocity * timeHorizon);
+        Vector3 endPosition= GeneralVector3.LineDistance(playerPos.realPosition, wayPoint.realPosition, velocity * stageDuration);
         return endPosition;
     }
 

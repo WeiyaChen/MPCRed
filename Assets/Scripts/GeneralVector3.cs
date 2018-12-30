@@ -13,15 +13,19 @@ public static class GeneralVector3  {
     public static float GetSlope2Points(Vector3 pointA,Vector3 pointB)
     {
         float result = (pointA.z - pointB.z) / (pointA.x - pointB.x);
-        if (result == Mathf.NegativeInfinity || result == Mathf.Infinity) return Mathf.Infinity;
-        else return result;
+        if (result == Mathf.NegativeInfinity || result == Mathf.Infinity)
+            return Mathf.Infinity;
+        else
+            return result;
     }
 
     public static float GetConstant2Points(Vector3 pointA, Vector3 pointB)
     {
         float result = (pointB.x * pointA.z - pointA.x * pointB.z) / (pointA.x - pointB.x);
-        if (result == Mathf.NegativeInfinity || result == Mathf.Infinity) return pointA.x;
-        else return result;
+        if (result == Mathf.NegativeInfinity || result == Mathf.Infinity)
+            return pointA.x;
+        else
+            return result;
     }
 
     public static Vector3 RotateCounterClockwise(Vector3 originPoint,Vector3 rotatePoint,float degree)
@@ -34,8 +38,10 @@ public static class GeneralVector3  {
     public static float PointDistanceSeg(float k,float b, Vector3 point)
     {
         float result;
-        if (k == Mathf.Infinity) result = Mathf.Abs(point.x - b);
-        else result = Mathf.Abs((k * point.x - point.z + b) / Mathf.Sqrt(k * k + 1));
+        if (k == Mathf.Infinity)
+            result = Mathf.Abs(point.x - b);
+        else
+            result = Mathf.Abs((k * point.x - point.z + b) / Mathf.Sqrt(k * k + 1));
         return result;
     }
 
